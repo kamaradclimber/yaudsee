@@ -1,6 +1,6 @@
 standard: clean
 	ocamlopt -o server unix.cmxa server.ml
-	ocamlopt -o client unix.cmxa client.ml
+	ocamlopt -o client unix.cmxa str.cmxa client.ml
 
 
 clean: 

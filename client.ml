@@ -9,7 +9,11 @@
 
 (* This is the example function of client opening connection and applying a
  * function over it*)
-(*this function should disappeer and be replaced by a more geenric fucntion*)
+(*this function should disappeer and be replaced by a more geenric fucntion
+ * this is copied from
+ * http://caml.inria.fr/pub/docs/oreilly-book/html/book-ora187.html
+ * *)
+
 let main_client client_fun  =
     if Array.length Sys.argv < 3 
     then Printf.printf "usage :  client server port\n"

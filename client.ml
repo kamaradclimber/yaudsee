@@ -51,6 +51,53 @@ let client_fun ic oc =
      | exn -> Unix.shutdown_connection ic ; raise exn  ;;
 
 
+class connection=
+    object(self)
+        val b=1
+        method run () = ()
+        method stop () = ()
+    end;;
+
+
+class ['a]  pool n=
+    object(self)
+        val size = n
+        val pool = Array.make n (None: 'a option)
+
+        method hasFreeSpace () = Array.fold_right (fun el acc -> acc ||
+        el=None) pool false
+        method private findFreeSpace () = 
+            begin 
+                assert (self#hasFreeSpace ());
+                let i = ref 0 in
+                while (pool.(!i) <> None) do incr i done;
+                !i
+            end
+        method put el =
+           begin
+               assert (self#hasFreeSpace ());
+               let freeSpot = self#findFreeSpace () in
+               pool.(freeSpot) <- Some el ;
+            end
+    end;;
+
+
+class ['a] threadedPool n=
+    (** On met dans le pool des threads dobjets qui repondent aux methode
+     * run/stop*)
+    object(self)
+        inherit [Thread.t] pool n as super
+        method add (el: 'a) arg = 
+            begin
+                let t = Thread.create (fun x -> el#run  x; el#stop x) arg in
+                super#put t;
+            end
+    end;;
+
+
+
+
+
 let areYouAYaudseServer server_addr server_port =
 (** This function asks a given host if he is a Yaudse server*)
 

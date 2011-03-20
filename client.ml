@@ -79,6 +79,16 @@ class ['a]  pool n=
                let freeSpot = self#findFreeSpace () in
                pool.(freeSpot) <- Some el ;
             end
+        method rem el=
+            begin
+                let i = ref 0 in
+                while (!i<n && pool.(!i) <> Some el) do incr i done;
+                if !i =n then failwith "Not_found" else pool.(!i) <- None
+            end
+        method private get i= 
+            match pool.(i) with 
+            |None -> failwith "Nothing_found"
+            |Some a -> a
     end;;
 
 
@@ -91,8 +101,22 @@ class ['a] threadedPool n=
             begin
                 let t = Thread.create (fun x -> el#run  x; el#stop x) arg in
                 super#put t;
+                Thread.id t
+            end
+        method del threadId = 
+            begin
+                let i = ref 0 in
+                while (!i <n && Thread.id (super#get !i) <> threadId) do  incr i done;
+                if !i = n then failwith "Not_found" else begin 
+                    Thread.kill (super#get !i);
+                    super#rem (super#get !i)
+                end
             end
     end;;
+(** La procédure pour ajouter une nouvelle connection dans le threadedPool est :
+    * - de vérfier quil y a de la place avec la methode hasFreeSpace
+    * - inserer une connection non demarrée avec add*)
+
 
 
 

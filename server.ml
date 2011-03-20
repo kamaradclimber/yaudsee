@@ -38,7 +38,62 @@ let go chan host=
     Unix.handle_unix_error (main_server host) chan ;;
 
 
+let gen_num = let c = ref 0 in (fun () -> incr c; !c) ;;
+exception Fin ;;
 
+class connexion (sd,sa) = 
+   object (self) 
+     val s_descr = sd
+     val s_addr = sa
+     val mutable numero = 0
+     initializer 
+       numero <- gen_num();
+       Printf.printf "TRACE.connexion : objet traitant %d créé\n" numero ;
+       print_newline()
+ 
+     method start () =  Thread.create (fun x -> self#run x ; self#stop x) ()
+ 
+     method stop() = 
+       Printf.printf "TRACE.connexion : fin objet traitant %d\n" numero ;
+       print_newline () ;
+       Unix.close s_descr
+ 
+    method run () = 
+      try 
+        while true do
+          let ligne =  my_input_line s_descr 
+          in if (ligne = "") or (ligne = "\013") then raise Fin ;
+             let result = "Je ne fais rien"^"\n"
+             in ignore (ThreadUnix.write s_descr result 0 (String.length result))
+        done
+      with  
+         Fin  -> () 
+       | exn  -> print_string (Printexc.to_string exn) ; print_newline() 
+   end ;;
+
+class server addr p = 
+   object (self)
+     val port = p 
+     val addr = addr
+     val mutable sock = ThreadUnix.socket Unix.PF_INET Unix.SOCK_STREAM 0
+ 
+     initializer 
+         Unix.bind sock (Unix.ADDR_INET(addr,port)) ;
+         Unix.listen sock 3
+    
+     method private client_addr = function 
+         Unix.ADDR_INET(host,_) -> Unix.string_of_inet_addr host
+       | _ -> "Unexpected client"
+ 
+     method run () = 
+       while(true) do 
+         let (sd,sa) = ThreadUnix.accept sock in 
+         let connexion = new connexion(sd,sa) 
+         in Printf.printf "TRACE.serv: nouvelle connexion de %s\n\n"
+                          (self#client_addr sa) ;
+         ignore (connexion#start ())
+       done
+   end ;;
 
 
 
@@ -56,8 +111,8 @@ let speclist=
 
 
 
+let _ = new server "192.168.0."
 
 
-
-go discovery_channel !host;;
+(*go discovery_channel !host;;*)
 Printf.printf "Service lancé\n"; flush stdout;;

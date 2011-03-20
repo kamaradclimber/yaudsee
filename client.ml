@@ -51,11 +51,27 @@ let client_fun ic oc =
      | exn -> Unix.shutdown_connection ic ; raise exn  ;;
 
 
-class connection=
-    object(self)
-        val b=1
-        method run () = ()
-        method stop () = ()
+class connection addr port=
+    object(self : 'a)
+        val addr =addr
+        val port = port
+        val mutable ic = None
+        method run (func: 'a -> in_channel -> out_channel -> unit)  =  
+            begin
+            let server = try Unix.inet_addr_of_string addr  with
+            Failure("inet_addr_of_string") -> try (Unix.gethostbyname
+            addr).Unix.h_addr_list.(0) with Not_found -> (Printf.eprintf "%s :
+                Serveur Inconnu" addr; exit 2)  (*en theorie il faudrait
+                ecrire du code qui permette a la connection de signaler que ca
+                ne va pas sans planter tout le programme*)
+                in
+                let sockaddr = Unix.ADDR_INET(server,port) in
+                let (icc,oc) = Unix.open_connection sockaddr in
+                ic <- Some icc;
+                func self icc oc
+            end
+        method stop () = match ic with None -> () | Some icc ->
+            Unix.shutdown_connection icc
     end;;
 
 
@@ -116,7 +132,6 @@ class ['a] threadedPool n=
 (** La procédure pour ajouter une nouvelle connection dans le threadedPool est :
     * - de vérfier quil y a de la place avec la methode hasFreeSpace
     * - inserer une connection non demarrée avec add*)
-
 
 
 

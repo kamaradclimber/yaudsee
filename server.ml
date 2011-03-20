@@ -26,6 +26,7 @@ let uppercase_channel ic oc =
 let discovery_channel ic oc=
     try while true do
         let s = input_line ic in
+        Printf.printf "je viens de recevoir : \"%s\"\n" s;flush stdout;
         let r =
             if s= "are you one of those ?"  then  "i might\n" else "you must have made a mistake\n" in 
         output_string oc r ; flush oc

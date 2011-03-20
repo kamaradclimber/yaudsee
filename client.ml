@@ -214,9 +214,11 @@ let peers = ref ([]: string list);;
 let areYou connection ic oc=
     Printf.printf "la fonction areYou est executé \n"; flush stdout;
     try 
-        output_string oc "are you one of those?\n"; flush oc;
+        output_string oc "are you one of those ?\n"; flush oc;
         let r = input_line ic in
-        if r="i might" then 
+        Printf.printf "test : %s\n" r;flush stdout;
+        if r="i might" 
+        then 
             begin
                 (*peers := (connection#getAddr () ):: !peers;*)
                 Printf.printf "%s est un des notres !\n" (connection#getAddr ()); flush stdout

@@ -62,12 +62,14 @@ class connection (addr, port)=
         method run (func: 'a -> in_channel -> out_channel -> unit)  = 
             try 
                 begin
-                    let server = Unix.inet_addr_of_string addr  
-                    in
+                    (* Il faudrait mettre ici beaucoup plus
+                     * de tests, de try catch
+                     * pour gerer les differetns cas comme dans la
+                     * fonction qui servait dexemple*)
+                    let server = Unix.inet_addr_of_string addr  in
                     let sockaddr = Unix.ADDR_INET(server,port) in
                     let (icc,oc) = Unix.open_connection sockaddr in
                     ic <- Some icc;
-                    Printf.printf "ba alors on y arrive ?\n" ; flush stdout;
                     func self icc oc
             end
     with _ -> (Printf.printf "erreur !!!"; flush stdout)
@@ -220,7 +222,7 @@ let areYou connection ic oc=
         if r="i might" 
         then 
             begin
-                (*peers := (connection#getAddr () ):: !peers;*)
+                peers := (connection#getAddr () ):: !peers;
                 Printf.printf "%s est un des notres !\n" (connection#getAddr ()); flush stdout
     end
                 else 

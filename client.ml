@@ -72,7 +72,7 @@ class connection (addr, port)=
                     ic <- Some icc;
                     func self icc oc
             end
-    with _ -> (Printf.printf "erreur !!!"; flush stdout)
+    with _ -> ()
 
         method stop () = match ic with None -> () | Some icc ->
             Unix.shutdown_connection icc
@@ -112,30 +112,51 @@ class ['a]  pool n=
             end;;
 
 
+class thread fonction arg=
+    object(self)
+        val t = Thread.create fonction arg
+        val mutable id = 0
+        val mutable running = false
+        val startTime = Sys.time ()
+        initializer
+            let idd = Thread.id t in
+            id <- idd
+        method isRunning () = running
+        method kill () = (Thread.kill t; running <- false)
+        method getId () = id
+        method timeFromStart () = Sys.time () -. startTime
+    end
+;;
+
+
+
+            
+
+
+
+
 class ['a] threadedPool n=
     (** On met dans le pool des threads dobjets qui repondent aux methode
      * run/stop*)
     object(self)
-        inherit [Thread.t] pool n as super
+        inherit [thread] pool n as super
         method add (el: 'a) arg = 
             begin
-                let t = Thread.create (fun x -> 
-                    Printf.printf "thread starté\n";flush stdout; 
+                let t = new thread (fun x -> 
                     el#run  x; el#stop ();
-                    Printf.printf "thread arreté\n";flush stdout
                     ) arg in
                 super#put t;
-                Thread.id t
+                t#getId ()
     end
-        method del threadId = 
-            begin
-                let i = ref 0 in
-                while (!i <n && Thread.id (super#get !i) <> threadId) do  incr i done;
-                if !i = n then failwith "Not_found" else begin 
-                    Thread.kill (super#get !i);
-                    super#rem (super#get !i)
-            end
-                end
+        method tryClean ()=
+            for i=0 to n-1 do
+                try 
+                let el = super#get i in
+                if el#timeFromStart () > 10. then el#kill ();
+                if not (el#isRunning ()) then super#rem el
+                with Failure("Nothing_found") -> ()
+                done
+
             end;;
 (** La procédure pour ajouter une nouvelle connection dans le threadedPool est :
     * - de vérfier quil y a de la place avec la methode hasFreeSpace
@@ -145,85 +166,26 @@ class ['a] threadedPool n=
 
 
 
-let areYouAYaudseServer server_addr server_port =
-    (** This function asks a given host if he is a Yaudse server*)
 
-    (* We first try to initialize a connection with the host*)
-    let server_inet_addr = try Unix.inet_addr_of_string server_addr with
-    Not_found -> (Printf.eprintf "%s : Unknown server\n" server_addr; exit 2) 
-                in
-                let socket = Unix.ADDR_INET (server_inet_addr, server_port) in
-                try 
-
-                    let domain = Unix.domain_of_sockaddr socket in
-                    let sock = Unix.socket domain Unix.SOCK_STREAM 0 in 
-                    try 
-                        Printf.printf "connection attempt initiated with %s\n" server_addr;
-                        flush stdout;
-                        Unix.connect sock socket ;
-                        let ic,oc = (Unix.in_channel_of_descr sock ,
-                        Unix.out_channel_of_descr sock) in
-
-                        Printf.printf "connected to %s\n" server_addr;
-                        (* Then we try to reduce the timeout time to go quicker on
-                         * the discovery*)
-                        Printf.printf "socket in timeout :%f\n" (Unix.getsockopt_float sock Unix.SO_RCVTIMEO);
-                        Unix.setsockopt_float sock Unix.SO_RCVTIMEO 0.5;
-                        Printf.printf "socket in timeout :%f\n" (Unix.getsockopt_float sock Unix.SO_RCVTIMEO);
-                        Printf.printf "socket out timeout :%f\n" (Unix.getsockopt_float sock Unix.SO_RCVTIMEO);
-                        Unix.setsockopt_float sock Unix.SO_RCVTIMEO 0.5;
-                        Printf.printf "socket out timeout :%f\n" (Unix.getsockopt_float sock Unix.SO_RCVTIMEO);
-
-
-                        (*This is the question asked to the host*)
-                        Printf.printf "To %s:%i are you one of those ?\n" server_addr server_port; flush stdout;
-                        output_string oc "are you one of those?\n"; flush oc;
-                        let r = input_line ic in
-                        Unix.shutdown_connection ic;
-                        Printf.printf "connection closed with %s\n" server_addr;
-                        (* it should only responds the right phrase*)
-                        Printf.printf "%s:%i %b\n" server_addr server_port (r="i
-                        might"); flush stdout;
-                        r = "i might"
-
-                        (*error handling*)
-                    with exn -> (Unix.close sock ; raise exn)	
-                    with 
-                    | Unix.Unix_error (err, fonction, stringarg) -> (Printf.printf "%s %s %s (%s:%i)   " (Unix.error_message err) fonction stringarg server_addr
-                    server_port; false)
-;;
-
-
-(* The discovery of all the host on a given network
- * if 4.8.15.16 is given, it will test all hosts in 4.8.15.16/24 but this might
- * change*)
-    let discovery_fun_sub_network my_addr port=
+let discovery_network my_addr port=
         let ip = Str.split (Str.regexp "\\.") my_addr in
         assert (List.length ip ==4);
         let prefixe = String.sub my_addr  0 (String.length my_addr - (String.length (List.nth ip 3))) in
         let range = Array.init 254 ( fun i -> prefixe^(string_of_int i) ) in
+        let peers = ref ([] :string list) in
+        let p = new threadedPool 10 in
 
-        List.filter (fun ip_address ->  areYouAYaudseServer ip_address port) (Array.to_list range)
-;; 
-
-
-
-let p = new threadedPool 10;;
-
-
-let peers = ref ([]: string list);;
-
-let areYou connection ic oc=
-    Printf.printf "la fonction areYou est executé \n"; flush stdout;
-    try 
-        output_string oc "are you one of those ?\n"; flush oc;
-        let r = input_line ic in
-        Printf.printf "test : %s\n" r;flush stdout;
-        if r="i might" 
-        then 
-            begin
-                peers := (connection#getAddr () ):: !peers;
-                Printf.printf "%s est un des notres !\n" (connection#getAddr ()); flush stdout
+        let areYou connection ic oc=
+            Printf.printf "la fonction areYou est executé \n"; flush stdout;
+            try 
+                output_string oc "are you one of those ?\n"; flush oc;
+                let r = input_line ic in
+                Printf.printf "test : %s\n" r;flush stdout;
+                if r="i might" 
+                then 
+                    begin
+                        peers := (connection#getAddr () ):: !peers;
+                        Printf.printf "%s est un des notres !\n" (connection#getAddr ()); flush stdout
     end
                 else 
                     ( Printf.printf "%s ne semble pas faire partie des notres !\n"
@@ -231,29 +193,24 @@ let areYou connection ic oc=
                     flush stdout )
                 with
                 |exn -> (Printf.printf "erreur ?"; flush stdout)
-;;
-
-Printf.printf "debut \n"; flush stdout;;
-let c = new connection ("192.168.1.89", 2203);;
-let id = p#add c areYou;;
-
-Printf.printf "%d est le process\n" id; flush stdout;
-Printf.printf "en attente \n"; flush stdout;
-
-Unix.sleep 100;;
-Printf.printf "fin \n"; flush stdout;
-
-
-
+                in
+                let i = ref 0 in
+                while !i < Array.length range do
+                    while !i < Array.length range && p#hasFreeSpace () do
+                        Printf.printf "%i lancé\n" !i; flush stdout;
+                        let c = new connection (range.(!i), port) in
+                        ignore(p#add c areYou);
+                        incr i
+                done;
+                Unix.sleep 5;
+                p#tryClean ();
+                done;;
 
 
+            
 
-(*
-(*fonction pour lancer le client de test*)
-let go_client () = main_client client_fun ;;
 
-discovery_fun_sub_network "192.168.1.2" 2203;;
 
-go_client ();;
 
-*)
+discovery_network "138.195.29.94" 80;;
+

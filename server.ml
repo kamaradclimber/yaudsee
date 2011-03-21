@@ -4,7 +4,7 @@ let get_my_addr () =
 
 let main_server  host serv_fun =
     try
-        let port =  2203 in 
+        let port =  80 in 
         let my_address = match host with None -> get_my_addr () | Some h ->
             Unix.inet_addr_of_string h in
         Printf.printf "Listening on %s:%i\n" (Unix.string_of_inet_addr

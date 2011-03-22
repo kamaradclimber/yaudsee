@@ -17,9 +17,10 @@ let main_server  host port serv_fun =
 
 let uppercase_channel ic oc =
     try while true do    
-        let s = input_line ic in 
-        let r = String.uppercase s 
-        in output_string oc (r^"\n") ; flush oc
+        let s = input_line ic in
+        output_string oc ((String.uppercase s)^"\n") ;
+        output_string oc ((String.lowercase s)^"\n") ;
+        output_string oc ("END\n") ; flush oc
     done
     with _ -> Printf.printf "End of text\n" ; flush stdout ; exit 0 ;;
 

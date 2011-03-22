@@ -51,6 +51,44 @@ let client_fun ic oc =
      | exn -> Unix.shutdown_connection ic ; raise exn  ;;
 
 
+class ['a] iterable =
+    object (self)
+        val  s = Queue.create ()
+        method pop () = Queue.pop s
+        method push (el: 'a) = Queue.push el s
+        method is_empty () = Queue.is_empty s
+        method copy () = 
+            let n = new iterable in
+            Queue.iter (fun el -> n#push el) s;
+            n
+    end;;
+
+let ipBigIntToString ip = 
+    (Big_int.string_of_big_int (Big_int.mod_big_int (Big_int.shift_right_big_int ip 0) (Big_int.power_big_int_positive_int (Big_int.big_int_of_int 2) 4))) ^ "." ^
+    (Big_int.string_of_big_int (Big_int.mod_big_int (Big_int.shift_right_big_int ip 4) (Big_int.power_big_int_positive_int (Big_int.big_int_of_int 2) 8))) ^ "." ^
+    (Big_int.string_of_big_int (Big_int.mod_big_int (Big_int.shift_right_big_int ip 8) (Big_int.power_big_int_positive_int (Big_int.big_int_of_int 2) 12))) ^"." ^
+    (Big_int.string_of_big_int (Big_int.mod_big_int (Big_int.shift_right_big_int ip 12) (Big_int.power_big_int_positive_int (Big_int.big_int_of_int 2) 16)))
+;;
+
+
+class ipv4 s=
+    (**les ips sont sous la forme x.x.x.x
+     * pour le jour où on t veut passer en IPV6 il suffit de faire une classe
+     * virtuelle/interface qui propose les meme fonctions cette classe*)
+    object (self)
+        val s = s
+        val mutable bin = 0
+        initializer 
+            let ip = Str.split (Str.regexp "\\.") s in
+            assert (List.length ip ==4);
+            bin <- Array.fold_left (fun acc el-> Big_int.add_big_int (Big_int.shift_left_big_int acc 4 ) (Big_int.big_int_of_string el)) ip
+        method get () = s
+        method isGreaterThan bi = Big_int.gt_big_int bin (bi#get ())
+        method rangeTo bi = (*DO STHING HERE*) ()
+    end;;
+
+
+
 class connection (addr, port)=
     object(self : 'a)
         val addr =addr
@@ -128,10 +166,7 @@ class thread fonction arg=
     end
 ;;
 
-
-
             
-
 
 
 
@@ -151,11 +186,26 @@ class ['a] threadedPool n=
         method tryClean ()=
             for i=0 to n-1 do
                 try 
-                let el = super#get i in
-                if el#timeFromStart () > 10. then el#kill ();
-                if not (el#isRunning ()) then super#rem el
-                with Failure("Nothing_found") -> ()
+                    let el = super#get i in
+                    if el#timeFromStart () > 10. then el#kill ();
+                    if not (el#isRunning ()) then super#rem el
+            with Failure("Nothing_found") -> ()
                 done
+
+
+        method doSomething fonction (iterable:  string iterable) port timeOut =
+            let iter = iterable#copy () in 
+            while not (iter#is_empty ()) do
+                while not (iter#is_empty ()) && self#hasFreeSpace () do
+                    let ip = iter#pop () in
+                    Printf.printf "Lancement de %s\n" ip; flush stdout;
+                    let c = new connection (ip, port) in
+                    ignore(self#add c fonction);
+            done;
+            Unix.sleep timeOut;
+            self#tryClean ()
+                done
+
 
             end;;
 (** La procédure pour ajouter une nouvelle connection dans le threadedPool est :
@@ -171,8 +221,11 @@ let discovery_network my_addr port=
         let ip = Str.split (Str.regexp "\\.") my_addr in
         assert (List.length ip ==4);
         let prefixe = String.sub my_addr  0 (String.length my_addr - (String.length (List.nth ip 3))) in
-        let range = Array.init 255 ( fun i -> prefixe^(string_of_int i) ) in
-        let peers = ref ([] :string list) in
+        let range = new iterable in
+        for i=0 to 254 do
+            range#push (prefixe^(string_of_int i))
+        done;
+        let peers = new iterable in
         let p = new threadedPool 10 in
 
         let areYou connection ic oc=
@@ -184,7 +237,7 @@ let discovery_network my_addr port=
                 if r="i might" 
                 then 
                     begin
-                        peers := (connection#getAddr () ):: !peers;
+                        peers#push (connection#getAddr () );
                         Printf.printf "%s est un des notres !\n" (connection#getAddr ()); flush stdout
     end
                 else 
@@ -194,23 +247,35 @@ let discovery_network my_addr port=
                 with
                 |exn -> (Printf.printf "erreur ?"; flush stdout)
                 in
-                let i = ref 0 in
-                while !i < Array.length range do
-                    while !i < Array.length range && p#hasFreeSpace () do
-                        Printf.printf "%i lancé\n" !i; flush stdout;
-                        let c = new connection (range.(!i), port) in
-                        ignore(p#add c areYou);
-                        incr i
-                done;
-                Unix.sleep 5;
-                p#tryClean ();
-                done;;
+                p#doSomething areYou range port 5;
+                range
+;;
 
 
-            
+let ask question range port= 
+    let p= new threadedPool 10 in 
+
+    let ask_server question connection ic oc=
+        Printf.printf "Je pose la question %s...." question; flush stdout;
+        try 
+            output_string oc ("Q&A "^question); flush oc;
+            let line = ref "" in
+            while !line <> "END" do
+                line := input_line ic;
+                Printf.printf "got answer from %s : %s\n" (connection#getAddr ())
+                !line; flush stdout;
+        done
+            with e -> Printf.printf "erreur from %s\n" (connection#getAddr ())
+            in
+                p#doSomething (ask_server question) range port 5;
+;;
+
+    
 
 
 
 
-discovery_network "88.163.232.134" 2203;;
+let range = discovery_network "192.168.1.3" 2203;;
+
+ask "test" range 2203;;
 

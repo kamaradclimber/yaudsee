@@ -1,5 +1,7 @@
-let get_my_addr () =
-    (Unix.gethostbyname (Unix.gethostname()) ).Unix.h_addr_list.(0) ;;
+
+let get_my_addr ()=
+(Unix.gethostbyname (Unix.gethostname()) ).Unix.h_addr_list.(0) ;;
+
 
 
 let main_server  host port serv_fun =
@@ -54,7 +56,6 @@ let speclist=
     ] 
         in
         Arg.parse speclist (fun (_:string)->()) "Some options:";;
-
 
 
 

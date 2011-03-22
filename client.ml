@@ -171,7 +171,7 @@ let discovery_network my_addr port=
         let ip = Str.split (Str.regexp "\\.") my_addr in
         assert (List.length ip ==4);
         let prefixe = String.sub my_addr  0 (String.length my_addr - (String.length (List.nth ip 3))) in
-        let range = Array.init 254 ( fun i -> prefixe^(string_of_int i) ) in
+        let range = Array.init 255 ( fun i -> prefixe^(string_of_int i) ) in
         let peers = ref ([] :string list) in
         let p = new threadedPool 10 in
 
@@ -212,5 +212,5 @@ let discovery_network my_addr port=
 
 
 
-discovery_network "138.195.29.94" 80;;
+discovery_network "88.163.232.134" 2203;;
 

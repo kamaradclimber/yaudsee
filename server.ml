@@ -10,7 +10,8 @@ let main_server  host port serv_fun =
     (** la fonction principale du serveur*)
     try
         let my_address = match host with 
-        |None -> get_my_addr () 
+        |None -> get_my_addr () (*TODO utiliser la fonction get_my_ips du module
+        Utils qui est defini dans le code du client*)
         | Some h -> Unix.inet_addr_of_string h in
         Printf.printf "Listening on %s:%i\n" (Unix.string_of_inet_addr my_address ) port; flush stdout;
         Unix.establish_server serv_fun (Unix.ADDR_INET(my_address, port))
@@ -20,6 +21,16 @@ let main_server  host port serv_fun =
 
 let go chan host port=
     Unix.handle_unix_error (main_server host port) chan ;;
+
+
+class handler matching_pattern fonction=
+    (** Cette classe represente tous les handlers 
+    object (self) 
+        val f = fonction
+        method 
+
+    end
+
 
 end;;
 

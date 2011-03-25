@@ -204,64 +204,104 @@ end
         * - inserer une connection non demarrée avec add*)
 
 
+    module File = struct
+        (** le module pour lire et ecrire dans des fichiers*)
+        let read_apply file f = 
+            (**lire ligne par ligne et appliquer sur chacune dentre elle la fonction
+             * f*)
+            try 
+                let fichier = open_in_bin file in
+                while true do
+                    f (input_line fichier)
+                done
+                    with 
+                    |Sys_error _ -> failwith("No such file")
+                    |End_of_file -> ()
+                    | _          -> failwith "error dans read_apply"
+
+        ;;
+
+        let readAndIfDoesNotExist file f_exists fdoesnot=
+            if Sys.file_exists file 
+            then read_apply file f_exists 
+            else fdoesnot file
+
+        end;;
 
 
-    module Action = struct
 
-        let discovery_network my_addr port=
-            let ip = Str.split (Str.regexp "\\.") my_addr in
-            assert (List.length ip ==4);
-            let prefixe = String.sub my_addr  0 (String.length my_addr - (String.length (List.nth ip 3))) in
-            let range = new Utils.iterable in
-            for i=0 to 254 do range#push (prefixe^(string_of_int i))  done;
-            let peers = new Utils.iterable in
-            let p = new threadedPool 10 in
+        module Action = struct
 
-            let areYou connection ic oc=
-                Printf.printf "la fonction areYou est executé \n"; flush stdout;
-                try 
-                    output_string oc "are you one of those ?\n"; flush oc;
-                    let r = input_line ic in
-                    Printf.printf "test : %s\n" r;flush stdout;
-                    if r="i might" 
-                    then 
-                        begin
-                            peers#push (connection#getAddr () );
-                            Printf.printf "%s est un des notres !\n" ((connection#getAddr ())#get ()); flush stdout
-        end
+            let discovery_network my_addr port=
+                let ip = Str.split (Str.regexp "\\.") my_addr in
+                assert (List.length ip ==4);
+                let prefixe = String.sub my_addr  0 (String.length my_addr - (String.length (List.nth ip 3))) in
+                let range = new Utils.iterable in
+                for i=0 to 254 do range#push (prefixe^(string_of_int i))  done;
+                let peers = new Utils.iterable in
+                let p = new threadedPool 100 in
+
+                let areYou connection ic oc=
+                    Printf.printf "la fonction areYou est executé \n"; flush stdout;
+                    try 
+                        output_string oc "are you one of those ?\n"; flush oc;
+                        let r = input_line ic in
+                        Printf.printf "test : %s\n" r;flush stdout;
+                        if r="i might" 
+                        then 
+                            begin
+                                peers#push ((connection#getAddr ())#get () );
+                                Printf.printf "%s est un des notres !\n" ((connection#getAddr ())#get ()); flush stdout
+    end
                     else 
                         ( Printf.printf "%s ne semble pas faire partie des notres !\n" ((connection#getAddr ())#get ()); flush stdout )
-                    with
-                    |exn -> (Printf.printf "erreur ?"; flush stdout)
-                    in
-                    p#doSomething areYou range port 5;
-                    range
-        ;;
+            with
+            |exn -> (Printf.printf "erreur ?"; flush stdout)
+                        in
+                        p#doSomething areYou range port 5;
+                        peers
+            ;;
 
 
-        let ask question range port= 
-            let p= new threadedPool 10 in 
+            let ask question range port= 
+                let p= new threadedPool 100 in 
 
-            let ask_server question connection ic oc=
-                Printf.printf "Je pose la question %s...." question; flush stdout;
-                try 
-                    output_string oc ("Q&A "^question); flush oc;
-                    let line = ref "" in
-                    while !line <> "END" do
-                        line := input_line ic;
-                        Printf.printf "got answer from %s : %s\n" ((connection#getAddr ())#get ()) !line; flush stdout;
-            done
-                with e -> Printf.printf "erreur from %s\n" ((connection#getAddr ())#get ())
-                    in
-                    p#doSomething (ask_server question) range port 5;
-        ;;
+                let ask_server question connection ic oc=
+                    Printf.printf "Je pose la question %s...." question; flush stdout;
+                    try 
+                        output_string oc ("Q&A "^question); flush oc;
+                        let line = ref "" in
+                        while !line <> "END" do
+                            line := input_line ic;
+                            Printf.printf "got answer from %s : %s\n" ((connection#getAddr ())#get ()) !line; flush stdout;
+                done
+                    with e -> Printf.printf "erreur from %s\n" ((connection#getAddr ())#get ())
+                        in
+                        p#doSomething (ask_server question) range port 5;
+            ;;
 
-    end;;
-
-
+        end;;
 
 
-        let range = Action.discovery_network "192.168.1.3" 2203;;
 
-        Action.ask "test" range 2203;;
+let range = new Utils.iterable;;
+
+        File.readAndIfDoesNotExist 
+        "ips.txt" 
+        (fun ligne -> range#push ligne)
+        (fun fileName -> 
+            let r  = Action.discovery_network "192.168.1.3" 2203 in
+            let fichier = open_out_gen [Open_append; Open_creat; Open_wronly] 0o777 fileName in
+            Printf.printf "testeststets";flush stdout;
+            while not (r#is_empty ()) do
+                let ip = r#pop () in
+                output_string fichier (ip^"\n");
+                range#push ip
+                        done;
+                        flush fichier;
+                        close_out fichier)
+;;
+
+let req = (Printf.printf "requete: ";flush stdout ; input_line stdin) in
+        Action.ask req range 2203;;
 

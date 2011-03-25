@@ -63,28 +63,52 @@ class ['a] iterable =
             n
     end;;
 
+    let shift_right ip shift=
+        let two = Big_int.big_int_of_int 2 in
+        let power = Big_int.power_big_int_positive_int two shift in
+        Big_int.div_big_int ip power ;;
+
 let ipBigIntToString ip = 
-    (Big_int.string_of_big_int (Big_int.mod_big_int (Big_int.shift_right_big_int ip 0) (Big_int.power_big_int_positive_int (Big_int.big_int_of_int 2) 4))) ^ "." ^
-    (Big_int.string_of_big_int (Big_int.mod_big_int (Big_int.shift_right_big_int ip 4) (Big_int.power_big_int_positive_int (Big_int.big_int_of_int 2) 8))) ^ "." ^
-    (Big_int.string_of_big_int (Big_int.mod_big_int (Big_int.shift_right_big_int ip 8) (Big_int.power_big_int_positive_int (Big_int.big_int_of_int 2) 12))) ^"." ^
-    (Big_int.string_of_big_int (Big_int.mod_big_int (Big_int.shift_right_big_int ip 12) (Big_int.power_big_int_positive_int (Big_int.big_int_of_int 2) 16)))
+    (Big_int.string_of_big_int (Big_int.mod_big_int (shift_right ip 0) (Big_int.power_big_int_positive_int (Big_int.big_int_of_int 2) 4))) ^ "." ^
+    (Big_int.string_of_big_int (Big_int.mod_big_int (shift_right ip 4) (Big_int.power_big_int_positive_int (Big_int.big_int_of_int 2) 8))) ^ "." ^
+    (Big_int.string_of_big_int (Big_int.mod_big_int (shift_right ip 8) (Big_int.power_big_int_positive_int (Big_int.big_int_of_int 2) 12))) ^"." ^
+    (Big_int.string_of_big_int (Big_int.mod_big_int (shift_right ip 12) (Big_int.power_big_int_positive_int (Big_int.big_int_of_int 2) 16)))
 ;;
+
+
+let shift_left ip shift=
+        let two = Big_int.big_int_of_int 2 in
+        let power = Big_int.power_big_int_positive_int two shift in
+        Big_int.mult_big_int ip power ;;
 
 
 class ipv4 s=
     (**les ips sont sous la forme x.x.x.x
      * pour le jour où on t veut passer en IPV6 il suffit de faire une classe
      * virtuelle/interface qui propose les meme fonctions cette classe*)
-    object (self)
+    object (self : 'a)
         val s = s
-        val mutable bin = 0
+        val mutable bin = Big_int.zero_big_int
         initializer 
             let ip = Str.split (Str.regexp "\\.") s in
             assert (List.length ip ==4);
-            bin <- Array.fold_left (fun acc el-> Big_int.add_big_int (Big_int.shift_left_big_int acc 4 ) (Big_int.big_int_of_string el)) ip
+            bin <- List.fold_left (fun acc el-> Big_int.add_big_int 
+            (shift_left acc 4 ) 
+            (Big_int.big_int_of_string el)
+            ) (Big_int.zero_big_int)    ip
         method get () = s
-        method isGreaterThan bi = Big_int.gt_big_int bin (bi#get ())
-        method rangeTo bi = (*DO STHING HERE*) ()
+        method getP () = bin
+        method isEqual (bi: 'a) = bin = bi#getP ()
+        method isGreaterThan (bi:'a) = Big_int.gt_big_int bin (bi#getP ())
+        method rangeTo (bi : 'a) =
+            assert (not (self#isGreaterThan bi));
+            let range = new iterable in
+            let tmp = ref bin in
+           while not (!tmp <> bi#getP ()) do
+               range#push (  ipBigIntToString (!tmp));
+               tmp := Big_int.succ_big_int !tmp
+           done;
+           range
     end;;
 
 
@@ -95,7 +119,7 @@ class connection (addr, port)=
         val port = port
         val mutable ic = None
 
-        method getAddr () = (addr : string)
+        method getAddr () = (addr : ipv4)
 
         method run (func: 'a -> in_channel -> out_channel -> unit)  = 
             try 
@@ -104,7 +128,7 @@ class connection (addr, port)=
                      * de tests, de try catch
                      * pour gerer les differetns cas comme dans la
                      * fonction qui servait dexemple*)
-                    let server = Unix.inet_addr_of_string addr  in
+                    let server = Unix.inet_addr_of_string (addr#get ())  in
                     let sockaddr = Unix.ADDR_INET(server,port) in
                     let (icc,oc) = Unix.open_connection sockaddr in
                     ic <- Some icc;
@@ -199,7 +223,8 @@ class ['a] threadedPool n=
                 while not (iter#is_empty ()) && self#hasFreeSpace () do
                     let ip = iter#pop () in
                     Printf.printf "Lancement de %s\n" ip; flush stdout;
-                    let c = new connection (ip, port) in
+                    let ipv = new ipv4 ip in
+                    let c = new connection (ipv, port) in
                     ignore(self#add c fonction);
             done;
             Unix.sleep timeOut;
@@ -238,11 +263,12 @@ let discovery_network my_addr port=
                 then 
                     begin
                         peers#push (connection#getAddr () );
-                        Printf.printf "%s est un des notres !\n" (connection#getAddr ()); flush stdout
+                        Printf.printf "%s est un des notres !\n"
+                        ((connection#getAddr ())#get ()); flush stdout
     end
                 else 
                     ( Printf.printf "%s ne semble pas faire partie des notres !\n"
-                    (connection#getAddr ());
+                    ((connection#getAddr ())#get ());
                     flush stdout )
                 with
                 |exn -> (Printf.printf "erreur ?"; flush stdout)
@@ -262,12 +288,14 @@ let ask question range port=
             let line = ref "" in
             while !line <> "END" do
                 line := input_line ic;
-                Printf.printf "got answer from %s : %s\n" (connection#getAddr ())
+                Printf.printf "got answer from %s : %s\n" ((connection#getAddr
+                ())#get ())
                 !line; flush stdout;
         done
-            with e -> Printf.printf "erreur from %s\n" (connection#getAddr ())
+            with e -> Printf.printf "erreur from %s\n" ((connection#getAddr
+            ())#get ())
             in
-                p#doSomething (ask_server question) range port 5;
+            p#doSomething (ask_server question) range port 5;
 ;;
 
     

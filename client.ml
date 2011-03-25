@@ -17,12 +17,9 @@
 module Utils = struct
 
     class ['a] iterable =
-        (** La classe qui stocke les elements (essentielement des IP pour le
-         * moments qu'on peut interroger*)
-        (** Pour l'utiliser il faut copier l'objet puis le parcourir, car la
-         * lecture est destructive*)
-        (** En théorie il faudrait gérer un jour une lecture non destructive et
-         * proposer un itérateur *)
+        (** La classe qui stocke les elements (essentielement des IP pour le moments qu'on peut interroger*)
+        (** Pour l'utiliser il faut copier l'objet puis le parcourir, car la lecture est destructive*)
+        (** En théorie il faudrait gérer un jour une lecture non destructive et  proposer un itérateur *)
         object (self)
             val  s = Queue.create ()
             method pop () = Queue.pop s
@@ -68,10 +65,7 @@ module Utils = struct
             initializer 
                 let ip = Str.split (Str.regexp "\\.") s in
                 assert (List.length ip ==4);
-                bin <- List.fold_left (fun acc el-> Big_int.add_big_int 
-                (shift_left acc 4 ) 
-                (Big_int.big_int_of_string el)
-                ) (Big_int.zero_big_int)    ip
+                bin <- List.fold_left (fun acc el-> Big_int.add_big_int (shift_left acc 4 ) (Big_int.big_int_of_string el) ) (Big_int.zero_big_int) ip
             method get () = s
             method getP () = bin
             method isEqual (bi: 'a) = bin = bi#getP ()
@@ -109,8 +103,7 @@ module Utils = struct
 end
                 with _ -> ()
 
-            method stop () = match ic with None -> () | Some icc ->
-                Unix.shutdown_connection icc
+            method stop () = match ic with None -> () | Some icc -> Unix.shutdown_connection icc
                     end;;
 
 
@@ -121,8 +114,7 @@ end
             val size = n
             val pool = Array.make n (None: 'a option)
 
-            method hasFreeSpace () = Array.fold_right (fun el acc -> acc ||
-            el=None) pool false
+            method hasFreeSpace () = Array.fold_right (fun el acc -> acc || el=None) pool false
             method private findFreeSpace () = 
                 begin 
                     assert (self#hasFreeSpace ());
@@ -177,9 +169,7 @@ end
             inherit [thread] pool n as super
             method add (el: 'a) arg = 
                 begin
-                    let t = new thread (fun x -> 
-                        el#run  x; el#stop ();
-                        ) arg in
+                    let t = new thread (fun x ->  el#run  x; el#stop () ) arg in
                     super#put t;
                     t#getId ()
         end
@@ -216,70 +206,62 @@ end
 
 
 
-module Action = struct
+    module Action = struct
 
-    let discovery_network my_addr port=
-        let ip = Str.split (Str.regexp "\\.") my_addr in
-        assert (List.length ip ==4);
-        let prefixe = String.sub my_addr  0 (String.length my_addr - (String.length (List.nth ip 3))) in
-        let range = new Utils.iterable in
-        for i=0 to 254 do
-            range#push (prefixe^(string_of_int i))
-                done;
-                let peers = new Utils.iterable in
-                let p = new threadedPool 10 in
+        let discovery_network my_addr port=
+            let ip = Str.split (Str.regexp "\\.") my_addr in
+            assert (List.length ip ==4);
+            let prefixe = String.sub my_addr  0 (String.length my_addr - (String.length (List.nth ip 3))) in
+            let range = new Utils.iterable in
+            for i=0 to 254 do range#push (prefixe^(string_of_int i))  done;
+            let peers = new Utils.iterable in
+            let p = new threadedPool 10 in
 
-                let areYou connection ic oc=
-                    Printf.printf "la fonction areYou est executé \n"; flush stdout;
-                    try 
-                        output_string oc "are you one of those ?\n"; flush oc;
-                        let r = input_line ic in
-                        Printf.printf "test : %s\n" r;flush stdout;
-                        if r="i might" 
-                        then 
-                            begin
-                                peers#push (connection#getAddr () );
-                                Printf.printf "%s est un des notres !\n"
-                                ((connection#getAddr ())#get ()); flush stdout
+            let areYou connection ic oc=
+                Printf.printf "la fonction areYou est executé \n"; flush stdout;
+                try 
+                    output_string oc "are you one of those ?\n"; flush oc;
+                    let r = input_line ic in
+                    Printf.printf "test : %s\n" r;flush stdout;
+                    if r="i might" 
+                    then 
+                        begin
+                            peers#push (connection#getAddr () );
+                            Printf.printf "%s est un des notres !\n" ((connection#getAddr ())#get ()); flush stdout
         end
                     else 
-                        ( Printf.printf "%s ne semble pas faire partie des notres !\n"
-                        ((connection#getAddr ())#get ());
-                        flush stdout )
+                        ( Printf.printf "%s ne semble pas faire partie des notres !\n" ((connection#getAddr ())#get ()); flush stdout )
                     with
                     |exn -> (Printf.printf "erreur ?"; flush stdout)
-                        in
-                        p#doSomething areYou range port 5;
-                        range
-    ;;
+                    in
+                    p#doSomething areYou range port 5;
+                    range
+        ;;
 
 
-    let ask question range port= 
-        let p= new threadedPool 10 in 
+        let ask question range port= 
+            let p= new threadedPool 10 in 
 
-        let ask_server question connection ic oc=
-            Printf.printf "Je pose la question %s...." question; flush stdout;
-            try 
-                output_string oc ("Q&A "^question); flush oc;
-                let line = ref "" in
-                while !line <> "END" do
-                    line := input_line ic;
-                    Printf.printf "got answer from %s : %s\n" ((connection#getAddr
-                    ())#get ())
-                    !line; flush stdout;
-        done
-                    with e -> Printf.printf "erreur from %s\n" ((connection#getAddr
-                    ())#get ())
-                in
-                p#doSomething (ask_server question) range port 5;
-    ;;
+            let ask_server question connection ic oc=
+                Printf.printf "Je pose la question %s...." question; flush stdout;
+                try 
+                    output_string oc ("Q&A "^question); flush oc;
+                    let line = ref "" in
+                    while !line <> "END" do
+                        line := input_line ic;
+                        Printf.printf "got answer from %s : %s\n" ((connection#getAddr ())#get ()) !line; flush stdout;
+            done
+                with e -> Printf.printf "erreur from %s\n" ((connection#getAddr ())#get ())
+                    in
+                    p#doSomething (ask_server question) range port 5;
+        ;;
 
-end;;
+    end;;
 
 
 
 
-    let range = Action.discovery_network "192.168.1.3" 2203;;
+        let range = Action.discovery_network "192.168.1.3" 2203;;
 
-    Action.ask "test" range 2203;;
+        Action.ask "test" range 2203;;
 

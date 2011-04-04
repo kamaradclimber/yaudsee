@@ -30,8 +30,11 @@ end;;
             (** La classe qui stocke les elements (essentielement des IP pour le moments qu'on peut interroger*)
             (** Pour l'utiliser il faut copier l'objet puis le parcourir, car la lecture est destructive*)
             (** En théorie il faudrait gérer un jour une lecture non destructive et  proposer un itérateur *)
+            (*TODO changer l'implémentation en list ref pour améliorer un peu
+             * l'utilisation du truc, en particulier la lecture non
+             * destructive*)
             object (self)
-                val  s = Queue.create ()
+                val  mutable s = Queue.create ()
                 method pop () = Queue.pop s
                 method push (el: 'a) = Queue.push el s
                 method is_empty () = Queue.is_empty s
@@ -39,6 +42,15 @@ end;;
                     let n = new iterable in
                     Queue.iter (fun el -> n#push el) s;
                     n
+                method iter f=(**Cette fonction n'est pas destructive*)
+                    let c=Queue.copy s in
+                    Queue.iter f s;
+                    s <- c
+                method fold f (acc:bool)= (**lecture non destructive*)
+                    let c = Queue.copy s in
+                    let a = Queue.fold f  acc s in
+                    s <- c;
+                    a
 end;;
 
         module IP = struct

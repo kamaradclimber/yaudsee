@@ -27,6 +27,8 @@ class handler matching_pattern (fonction : out_channel -> string -> unit)=
     (** Cette classe represente tous les handlers*) 
     object (self) 
         val f   = fonction
+        val pattern = matching_pattern
+        method pattern2string () = pattern
         method doesHandle request= 
             let reg = Str.regexp matching_pattern in
             Str.string_match reg request 0
@@ -41,42 +43,56 @@ let handler ic oc=
     try while true do
         let s = input_line ic in
         Printf.printf "je viens de recevoir : \"%s\"\n" s;flush stdout;
-        ignore( handlers#fold 
-        (fun alreadyFoundAUniqueHandler handler ->
-            alreadyFoundAUniqueHandler 
-        || not (handler#doesHandle s) 
-        || (handler#handles oc s; true))
-        false)
+        (**TODO faire en sorte que seule une réponse puisse etre renvoyée*)
+        ignore( handlers#iter 
+        (fun  handler -> 
+            if handler#doesHandle s then handler#handles oc s
+        )
+        );
+        
+        Printf.printf "fin de traitement pour : \"%s\"\n" s;flush stdout;
     done
     with End_of_file -> ();exit 0
 
 
 end;;
 
+(**Beginning of handlers definitions*)
+
+let default_channel = new Server.handler ".*$?" (fun oc s->
+    (** Default handler*)
+        output_string oc ("END\n") ; flush oc
+);;
 
 
-let uppercase_channel = new Server.handler "UPP.*" (fun oc s->
+let uppercase_channel = new Server.handler "UPP.*$?" (fun oc s->
     (** La fonction de test qui met en majuscule les termes envoyés*)
+        Printf.printf "requete UPP \"%s\"\n" s;flush stdout;
         output_string oc ((String.uppercase s)^"\n") ;
         output_string oc ((String.lowercase s)^"\n") ;
         output_string oc ("END\n") ; flush oc
 );;
 
-Server.handlers#push uppercase_channel;;
 
 
 
 let discovery_channel =
-    new Server.handler "DISC.*" (fun oc s->
+    new Server.handler "DISC.*$?" (fun oc s->
     (* la fonction qui répond aux requetes de decouvertes envoyées pas les bons  client*)
-        Printf.printf "je viens de recevoir : \"%s\"\n" s;flush stdout;
+        Printf.printf "requete DISC \"%s\"\n" s;flush stdout;
         let r =
-            if s= "are you one of those ?"  then  "i might\n" else "you must have made a mistake\n" in 
+            if s= "DISC are you one of those ?"  then  "i might\n" else "you must have made a mistake\n" in 
         output_string oc r ; flush oc
     );;         
 
-
+(** Write the handlers in the order they would be executed*)
 Server.handlers#push discovery_channel;;
+Server.handlers#push uppercase_channel;;
+Server.handlers#push default_channel;;
+
+Server.handlers#iter (fun el->Printf.printf "pattern %s\n" (el#pattern2string
+()));;
+flush stdout;;
 
 
 (* Parsing of the command line*)

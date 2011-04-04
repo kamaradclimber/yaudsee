@@ -43,13 +43,9 @@ end;;
                     Queue.iter (fun el -> n#push el) s;
                     n
                 method iter f=(**Cette fonction n'est pas destructive*)
-                    let c=Queue.copy s in
                     Queue.iter f s;
-                    s <- c
                 method fold f (acc:bool)= (**lecture non destructive*)
-                    let c = Queue.copy s in
                     let a = Queue.fold f  acc s in
-                    s <- c;
                     a
 end;;
 

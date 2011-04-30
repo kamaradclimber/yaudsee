@@ -21,6 +21,7 @@ let main_server  host port serv_fun =
 
 
 let go chan host port=
+	(**La fonction lancée lors de l'execution et qui demande à l'OS de gérer en plus les erreurs*)
     Unix.handle_unix_error (main_server host port) chan
 
 class handler matching_pattern (fonction : out_channel -> string -> unit)=

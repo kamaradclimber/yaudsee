@@ -76,7 +76,7 @@ end;;
 
 
         let get_my_ips () = 
-            let _ = Unix.system "touch ips.tmp && hostname -I >>ips.tmp" in
+            let _ = Unix.system "touch ips.tmp && hostname -i >>ips.tmp" in
             let  l= ref "" in
             File.read_apply "ips.tmp" (fun ligne -> l := ligne);
             let ips = Str.split (Str.regexp " +") !l in

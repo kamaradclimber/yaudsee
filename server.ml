@@ -1,5 +1,3 @@
-
-
 open Utils
 module Server = struct
     (** gère le serveur *)
@@ -86,9 +84,21 @@ let discovery_channel =
         output_string oc r ; flush oc
     );;         
 
+
+let genius_channel = 
+	new Server.handler "KK.*$?" (fun oc s->
+		Printf.printf "requete KK \"%s\" \n" s;flush stdout;
+		output_string oc (s^"\n");
+		output_string oc "1";
+		output_string oc "http://www.les3mousquetaires.com\n";
+		output_string oc "END\n"; flush oc
+	);;
+
+
 (** Write the handlers in the order they would be executed*)
 Server.handlers#push discovery_channel;;
 Server.handlers#push uppercase_channel;;
+Server.handlers#push genius_channel;;
 Server.handlers#push default_channel;;
 
 Server.handlers#iter (fun el->Printf.printf "pattern %s\n" (el#pattern2string
